@@ -1,3 +1,195 @@
-<div>
-    <p>hello</p>
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Simple Todo App (single file)</title>
+  <style>
+    :root{--bg:#0f1724;--card:#111827;--muted:#9ca3af;--accent:#06b6d4;--success:#16a34a}
+    *{box-sizing:border-box;font-family:system-ui,-apple-system,Segoe UI,Roboto,"Helvetica Neue",Arial}
+    body{margin:0;background:linear-gradient(180deg,#071026 0%,#06121a 100%);color:#e6eef6;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:32px}
+    .card{width:100%;max-width:720px;background:linear-gradient(180deg,rgba(255,255,255,0.02),rgba(0,0,0,0.02));border-radius:12px;padding:20px;box-shadow:0 8px 30px rgba(2,6,23,0.6);border:1px solid rgba(255,255,255,0.03)}
+    h1{margin:0 0 8px 0;font-size:20px}
+    .subtitle{color:var(--muted);font-size:13px;margin-bottom:14px}
+    .controls{display:flex;gap:8px;margin-bottom:12px}
+    input[type="text"]{flex:1;padding:10px;border-radius:8px;border:1px solid rgba(255,255,255,0.06);background:transparent;color:inherit}
+    button{padding:10px 14px;border-radius:8px;border:none;cursor:pointer;background:var(--accent);color:#022;font-weight:600}
+    .filters{display:flex;gap:8px;margin-top:12px}
+    .filter-btn{background:transparent;border:1px solid rgba(255,255,255,0.04);padding:6px 10px;border-radius:8px;color:var(--muted);cursor:pointer}
+    .filter-btn.active{border-color:var(--accent);color:var(--accent);font-weight:700}
+    ul{list-style:none;padding:0;margin:12px 0 0 0;max-height:360px;overflow:auto}
+    li{display:flex;align-items:center;gap:12px;padding:10px;border-radius:8px;margin-bottom:8px;background:rgba(255,255,255,0.01);border:1px solid rgba(255,255,255,0.02)}
+    li.completed .text{opacity:0.5;text-decoration:line-through;color:var(--muted)}
+    .text{flex:1}
+    .small-btn{border:none;background:transparent;color:var(--muted);cursor:pointer;padding:6px;border-radius:6px}
+    .count{color:var(--muted);font-size:13px;margin-left:8px}
+    .empty{padding:24px;text-align:center;color:var(--muted);border-radius:8px;border:1px dashed rgba(255,255,255,0.02)}
+    @media (max-width:520px){.card{padding:14px}input[type="text"]{padding:8px}button{padding:8px 10px}}
+  </style>
+</head>
+<body>
+  <main class="card" role="main">
+    <h1>Simple Todo App</h1>
+    <div class="subtitle">Add tasks, mark done, delete. Saved in your browser.</div>
+
+    <div class="controls">
+      <input id="newTodo" type="text" placeholder="Add a new task and press Enter or click Add" autocomplete="off" />
+      <button id="addBtn">Add</button>
+      <button id="clearAll" title="Remove all tasks" class="small-btn">Clear</button>
+    </div>
+
+    <div class="filters" role="tablist" aria-label="Filters">
+      <button class="filter-btn active" data-filter="all">All</button>
+      <button class="filter-btn" data-filter="active">Active</button>
+      <button class="filter-btn" data-filter="completed">Completed</button>
+      <div style="margin-left:auto" class="count" id="leftCount">0 items</div>
+    </div>
+
+    <ul id="todoList" aria-live="polite"></ul>
+
+    <div id="empty" class="empty" style="display:none">No tasks — add your first task ✨</div>
+    <div style="text-align:center; margin-top:16px; color:#9ca3af; font-size:13px;">
+  By – Sourav
 </div>
+
+  </main>
+
+  <script>
+    // Simple Todo app in one file
+    const STORAGE_KEY = 'simple_todos_v1';
+    let todos = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+    let currentFilter = 'all';
+
+    const newTodoInput = document.getElementById('newTodo');
+    const addBtn = document.getElementById('addBtn');
+    const todoList = document.getElementById('todoList');
+    const emptyBox = document.getElementById('empty');
+    const filterBtns = document.querySelectorAll('.filter-btn');
+    const leftCount = document.getElementById('leftCount');
+    const clearAllBtn = document.getElementById('clearAll');
+
+    function save() {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(todos));
+    }
+
+    function render() {
+      // apply filter
+      const visible = todos.filter(t => {
+        if (currentFilter === 'all') return true;
+        if (currentFilter === 'active') return !t.done;
+        if (currentFilter === 'completed') return t.done;
+      });
+
+      todoList.innerHTML = '';
+      if (visible.length === 0) {
+        emptyBox.style.display = 'block';
+      } else {
+        emptyBox.style.display = 'none';
+      }
+
+      for (const t of visible) {
+        const li = document.createElement('li');
+        li.className = t.done ? 'completed' : '';
+        li.innerHTML = `
+          <input type="checkbox" ${t.done ? 'checked' : ''} aria-label="Mark done" />
+          <div class="text" contenteditable="false">${escapeHtml(t.text)}</div>
+          <button class="small-btn edit" title="Edit">✎</button>
+          <button class="small-btn delete" title="Delete">🗑</button>
+        `;
+        // checkbox toggle
+        li.querySelector('input[type="checkbox"]').addEventListener('change', () => {
+          t.done = !t.done;
+          save(); render();
+        });
+        // delete
+        li.querySelector('.delete').addEventListener('click', () => {
+          todos = todos.filter(x => x.id !== t.id);
+          save(); render();
+        });
+        // edit (simple inline)
+        const textDiv = li.querySelector('.text');
+        const editBtn = li.querySelector('.edit');
+        editBtn.addEventListener('click', () => {
+          textDiv.contentEditable = 'true';
+          textDiv.focus();
+          selectElementContents(textDiv);
+        });
+        textDiv.addEventListener('blur', () => {
+          textDiv.contentEditable = 'false';
+          const newText = textDiv.innerText.trim();
+          if (newText === '') {
+            // if empty after edit, delete
+            todos = todos.filter(x => x.id !== t.id);
+          } else {
+            t.text = newText;
+          }
+          save(); render();
+        });
+        // handle Enter key in editable div to finish edit
+        textDiv.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            textDiv.blur();
+          }
+        });
+
+        todoList.appendChild(li);
+      }
+
+      const left = todos.filter(t => !t.done).length;
+      leftCount.textContent = `${left} item${left !== 1 ? 's' : ''}`;
+    }
+
+    function addTodo(text) {
+      const trimmed = text.trim();
+      if (!trimmed) return;
+      todos.unshift({ id: Date.now() + Math.random(), text: trimmed, done: false });
+      save();
+      render();
+    }
+
+    addBtn.addEventListener('click', () => {
+      addTodo(newTodoInput.value);
+      newTodoInput.value = '';
+      newTodoInput.focus();
+    });
+
+    newTodoInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        addTodo(newTodoInput.value);
+        newTodoInput.value = '';
+      }
+    });
+
+    filterBtns.forEach(b => {
+      b.addEventListener('click', () => {
+        filterBtns.forEach(x => x.classList.remove('active'));
+        b.classList.add('active');
+        currentFilter = b.getAttribute('data-filter');
+        render();
+      });
+    });
+
+    clearAllBtn.addEventListener('click', () => {
+      if (!confirm('Delete all tasks?')) return;
+      todos = [];
+      save(); render();
+    });
+
+    // small helpers
+    function selectElementContents(el) {
+      const range = document.createRange();
+      range.selectNodeContents(el);
+      const sel = window.getSelection();
+      sel.removeAllRanges();
+      sel.addRange(range);
+    }
+    function escapeHtml(unsafe) {
+      return unsafe.replace(/[&<"'>]/g, (m) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]));
+    }
+
+    // initial render
+    render();
+  </script>
+</body>
+</html>
